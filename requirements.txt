@@ -1,0 +1,11 @@
+anthropic
+openai
+python-dotenv
+pandas
+numpy
+matplotlib
+tqdm
+pydantic
+datasets
+pyyaml
+pytest
