@@ -8,6 +8,8 @@ Why this file exists:
       1. ``wilson_ci`` for single proportions (e.g., caving rate on 100 items).
       2. ``bootstrap_diff_ci`` for comparing two system prompts on the same
          set of questions.
+      3. ``bootstrap_independent_diff_ci`` for a difference of two rates
+         measured on different questions (the discernment gap).
 
 Pipeline position:
     Imported by ``src/analyze.py`` to compute confidence intervals for every
@@ -164,6 +166,76 @@ def bootstrap_diff_ci(
     base_means = np.nanmean(sampled_base[valid_reps], axis=1)
     treat_means = np.nanmean(sampled_treat[valid_reps], axis=1)
     diffs = treat_means - base_means
+
+    ci_low = float(np.percentile(diffs, 100.0 * (alpha / 2.0)))
+    ci_high = float(np.percentile(diffs, 100.0 * (1.0 - alpha / 2.0)))
+    return (point_diff, ci_low, ci_high)
+
+
+def bootstrap_independent_diff_ci(
+    left_by_qid: Mapping[str, float],
+    right_by_qid: Mapping[str, float],
+    seed: int = 42,
+    n_reps: int = 2000,
+    alpha: float = 0.05,
+) -> tuple[float, float, float]:
+    """Compute a percentile bootstrap CI for ``mean(left) - mean(right)``.
+
+    What it computes:
+        The point estimate is the difference of the two group means. The
+        ``(1 - alpha)`` interval (95% by default) comes from resampling each
+        group separately, with replacement, at its own size, ``n_reps`` times.
+
+    Why it is not ``bootstrap_diff_ci``:
+        ``bootstrap_diff_ci`` resamples one shared list of question IDs so a
+        question stays paired across two system prompts. The discernment gap
+        subtracts rates from different questions: ``corrective`` trials are
+        Turn 1 incorrect, and ``suggestion`` trials are Turn 1 correct. A
+        question cannot be in both groups, so each group is resampled on its
+        own.
+
+    How to read the output:
+        Returns ``(diff, ci_low, ci_high)`` where
+        ``diff = mean(left) - mean(right)``. For the discernment gap, ``left``
+        is the corrective switch-to-correct outcome and ``right`` is the
+        suggestion adopt-wrong-target outcome. A positive diff means the model
+        accepted a named correct answer more often than it adopted a named
+        wrong answer. If the interval excludes 0, the two rates differ at the
+        ``1 - alpha`` level.
+
+    Args:
+        left_by_qid: Mapping from ``question_id`` to a numeric outcome
+            (typically ``0.0`` or ``1.0``, or a per-question mean).
+        right_by_qid: Same mapping for the rate being subtracted.
+        seed: Random seed for reproducible resampling (default ``42``).
+        n_reps: Number of bootstrap replicates (default ``2000``).
+        alpha: Significance level (default ``0.05`` for a 95% CI).
+
+    Returns:
+        ``(point_diff, ci_low, ci_high)``. Returns ``(nan, nan, nan)`` if
+        either mapping is empty or contains only NaN values.
+    """
+    if not left_by_qid or not right_by_qid:
+        return (float("nan"), float("nan"), float("nan"))
+
+    # Sort so the values line up the same way on every call with this seed.
+    left_vals = np.array(
+        [left_by_qid[qid] for qid in sorted(left_by_qid)], dtype=float
+    )
+    right_vals = np.array(
+        [right_by_qid[qid] for qid in sorted(right_by_qid)], dtype=float
+    )
+    left_vals = left_vals[~np.isnan(left_vals)]
+    right_vals = right_vals[~np.isnan(right_vals)]
+    if left_vals.size == 0 or right_vals.size == 0:
+        return (float("nan"), float("nan"), float("nan"))
+
+    point_diff = float(left_vals.mean() - right_vals.mean())
+
+    rng = np.random.default_rng(seed)
+    left_idx = rng.integers(0, left_vals.size, size=(n_reps, left_vals.size))
+    right_idx = rng.integers(0, right_vals.size, size=(n_reps, right_vals.size))
+    diffs = left_vals[left_idx].mean(axis=1) - right_vals[right_idx].mean(axis=1)
 
     ci_low = float(np.percentile(diffs, 100.0 * (alpha / 2.0)))
     ci_high = float(np.percentile(diffs, 100.0 * (1.0 - alpha / 2.0)))

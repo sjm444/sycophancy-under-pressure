@@ -10,7 +10,7 @@ import math
 
 import pytest
 
-from src.stats import bootstrap_diff_ci, wilson_ci
+from src.stats import bootstrap_diff_ci, bootstrap_independent_diff_ci, wilson_ci
 
 
 def test_wilson_ci_known_values() -> None:
@@ -62,3 +62,30 @@ def test_bootstrap_diff_ci_empty_input() -> None:
     """Empty baseline or treatment returns (nan, nan, nan)."""
     diff, lo, hi = bootstrap_diff_ci({}, {"q1": 1.0})
     assert math.isnan(diff) and math.isnan(lo) and math.isnan(hi)
+
+
+def test_bootstrap_independent_diff_ci_reproducible() -> None:
+    """Unpaired difference is mean(left) - mean(right), and the seed fixes the CI."""
+    left = {f"c{i}": 1.0 for i in range(8)}
+    right = {"s0": 1.0, "s1": 0.0, "s2": 1.0, "s3": 0.0}
+
+    res1 = bootstrap_independent_diff_ci(left, right, seed=42, n_reps=2000)
+    res2 = bootstrap_independent_diff_ci(left, right, seed=42, n_reps=2000)
+    assert res1 == res2
+
+    diff, lo, hi = res1
+    assert diff == pytest.approx(1.0 - 0.5)
+    assert lo < diff < hi
+
+
+def test_bootstrap_independent_diff_ci_constant_and_empty() -> None:
+    """Constant groups collapse the CI to the point estimate; an empty group is NaN."""
+    diff, lo, hi = bootstrap_independent_diff_ci(
+        {"a": 1.0, "b": 1.0}, {"c": 0.0}, seed=1, n_reps=100
+    )
+    assert diff == pytest.approx(1.0)
+    assert lo == pytest.approx(1.0)
+    assert hi == pytest.approx(1.0)
+
+    empty_diff, empty_lo, empty_hi = bootstrap_independent_diff_ci({}, {"q": 1.0})
+    assert math.isnan(empty_diff) and math.isnan(empty_lo) and math.isnan(empty_hi)

@@ -138,6 +138,22 @@ def test_end_to_end_mock_pipeline(tmp_path: Path) -> None:
     assert auth_diff == pytest.approx(-1.0)
     assert corr_diff == pytest.approx(-1.0)
 
+    # Discernment gap = corrective switch-to-correct minus suggestion adopt-wrong.
+    # Both rates are 1.0 under baseline and 0.0 under anti_sycophancy, so both gaps are 0.
+    for sp in ("baseline", "anti_sycophancy"):
+        gap = metrics["discernment_gap"][("mock", sp)]
+        corrective = metrics["correction_summary"][("mock", sp, "corrective")]["rate"]
+        suggestion = metrics["caving_summary"][("mock", sp, "suggestion")]["rate"]
+        assert gap["diff"] == pytest.approx(corrective - suggestion)
+        assert gap["diff"] == pytest.approx(0.0)
+        assert gap["ci_low"] == pytest.approx(0.0)
+        assert gap["ci_high"] == pytest.approx(0.0)
+        assert gap["corrective_n"] == 2
+        assert gap["suggestion_n"] == 4
+    summary_text = summary_path.read_text(encoding="utf-8")
+    assert "## 4. Discernment Gap" in summary_text
+    assert "| `mock` | `baseline` | +0.0 pp [+0.0, +0.0] | 2 | 4 |" in summary_text
+
 
 def _make_ten_questions() -> list[Question]:
     """Create 10 synthetic questions across all three categories."""
