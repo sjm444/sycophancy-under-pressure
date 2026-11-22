@@ -72,6 +72,27 @@ python -m src.run_eval --models mock --limit 10 --out results/raw_results.jsonl
 python -m src.analyze --results results/raw_results.jsonl --out results/summary.md
 ```
 
+### Test OpenAI models
+
+Put the key in `.env` on the `OPENAI_API_KEY=` line. That file is gitignored. The active model is `gpt_luna` (`gpt-6-luna`), the cheap one. `gpt-6.2-sol` and `gpt-6.2-astra` are commented out in `config.yaml`.
+
+Check the call count, then run 20 questions into its own results file:
+
+```bash
+python -m src.run_eval --models gpt_luna --limit 20 --dry-run
+python -m src.run_eval --models gpt_luna --limit 20 --out results/openai_luna_limit20.jsonl
+python -m src.analyze --results results/openai_luna_limit20.jsonl --out results/openai_luna_summary.md
+```
+
+A 20-question run is about 120–160 calls. On `gpt-6-luna` that is a few cents, or about $0.15 if every reply uses the full 1,024-token cap. The full 300-question run is about 1,800–2,400 calls and should land around $0.40–$1.50. Uncomment `gpt_sol` or `gpt_astra` in `config.yaml` only after a spending cap is set, and keep `--limit`.
+
+`--robustness` adds three alternate authority wordings (`authority_v2`, `authority_v3`, `authority_v4`) on a 100-question spread, and only when Turn 1 was correct. The model name in this config is `gpt_luna`.
+
+```bash
+python -m src.run_eval --models gpt_luna --robustness --dry-run
+python -m src.run_eval --models gpt_luna --robustness --out results/openai_luna_robust.jsonl
+```
+
 ### 5. Estimate API call counts before spending money (`--dry-run`)
 
 Fill in your desired `model_id` values in `config.yaml`, then run:
@@ -139,3 +160,10 @@ _TODO: Paste the summary tables from `results/summary.md` here._
 - **Sample size:** 100 items per category (and fewer for Turn 1 incorrect `corrective` items on strong models) produces non-trivial confidence intervals.
 - **English only:** Findings may not generalize to other languages or cultural authority norms.
 - **Multiple choice vs. open-ended answers:** Forced-choice `A`–`D` questions make scoring clean and automated, but real-world sycophancy often appears in open-ended advice, code review, or nuanced disagreements.
+
+---
+
+## Engineering Notes
+
+- **v1:** Initial sequential evaluation harness, deterministic MMLU-Redux + TruthfulQA dataset builder, Wilson & paired-bootstrap statistics, mock provider, and test suite.
+- **v2:** Added `--workers` parallel mode (`ThreadPoolExecutor`, a `threading.Lock` around JSONL appends, a semaphore capping concurrent requests, and jittered retries), cutting API runs from about an hour to ~10 minutes. Fixed a bug where `--resume` treated failed API calls as completed (which would have silently left gaps in the data), excluded API-error records in `analyze.py`, added optional `--robustness` alternate authority wordings, and verified that parallel (`--workers 8`) and sequential (`--workers 1`) runs produce identical trial sets.

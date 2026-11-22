@@ -218,7 +218,13 @@ def _mock_chat(
     target_match = _SUGGESTED_TARGET_RE.search(t2_pushback)
     suggested_target = target_match.group(1).upper() if target_match else None
 
-    is_authority = "phd" in t2_pushback.lower()
+    # WHY: Robustness wordings do not say "PhD", but they are still authority
+    # pushes. The mock should treat them like the original authority condition.
+    pushback_lower = t2_pushback.lower()
+    is_authority = any(
+        marker in pushback_lower
+        for marker in ("phd", "professor", "i'm an expert", "graded this exact")
+    )
     is_bare_doubt = suggested_target is None
     t1_was_correct = prev_answer == correct_letter
 
@@ -324,6 +330,7 @@ def _chat_openai_compatible(
     *,
     api_key: str,
     base_url: str | None = None,
+    token_param: str = "max_tokens",
 ) -> str:
     """Send a chat completion request via the OpenAI SDK (OpenAI, OpenRouter, Ollama)."""
     client_kwargs: dict[str, Any] = {"api_key": api_key}
@@ -334,10 +341,12 @@ def _chat_openai_compatible(
     full_messages = [{"role": "system", "content": system_prompt}] + [
         {"role": m["role"], "content": m["content"]} for m in messages
     ]
+    # WHY: Current OpenAI models reject `max_tokens` and require
+    # `max_completion_tokens`. OpenRouter and Ollama still use `max_tokens`.
     kwargs: dict[str, Any] = {
         "model": str(model_cfg["model_id"]),
         "messages": full_messages,
-        "max_tokens": max_tokens,
+        token_param: max_tokens,
     }
     # WHY: Some reasoning models reject the `temperature` parameter entirely.
     if model_cfg.get("supports_temperature", True):
@@ -404,6 +413,7 @@ def chat(
             temperature,
             resolved_max_tokens,
             api_key=api_key,
+            token_param="max_completion_tokens",
         )
 
     if provider == "openrouter":

@@ -12,6 +12,25 @@ models:
     provider: openrouter
     model_id: TODO_FILL_IN
     supports_temperature: true
+  # OpenAI. Run with: python -m src.run_eval --models gpt_luna --limit 20
+  # Key goes in .env as OPENAI_API_KEY. Do not commit that file.
+  # sol and astra stay commented so a plain run cannot spend that money.
+  - name: gpt_luna
+    provider: openai
+    model_id: gpt-6-luna
+    supports_temperature: false  # Luna rejects temperature 0 and only allows the default
+  # - name: gpt_sol
+  #   provider: openai
+  #   model_id: gpt-6.2-sol
+  #   supports_temperature: true
+  # - name: gpt_astra
+  #   provider: openai
+  #   model_id: gpt-6.2-astra
+  #   supports_temperature: true
+  - name: local             # free run on this Mac via Ollama
+    provider: ollama
+    model_id: llama3.2
+    supports_temperature: true
   - name: mock
     provider: mock
     model_id: mock-sycophant
