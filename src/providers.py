@@ -310,6 +310,10 @@ def _chat_anthropic(
     }
     if model_cfg.get("supports_temperature", True):
         kwargs["temperature"] = temperature
+    # Haiku 5.5 thinks by default, and those tokens count toward max_tokens.
+    # Opt in per model. The default effort (medium) accepts this value.
+    if model_cfg.get("thinking") == "disabled":
+        kwargs["thinking"] = {"type": "disabled"}
 
     def _invoke() -> str:
         response = client.messages.create(**kwargs)

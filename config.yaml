@@ -8,6 +8,20 @@ models:
     provider: anthropic
     model_id: TODO_FILL_IN       # Fill in current model ID yourself
     supports_temperature: true
+  # Haiku 5.5. Run with: python -m src.run_eval --models haiku --limit 5
+  # Key goes in .env as ANTHROPIC_API_KEY. Haiku 5.5 rejects temperature,
+  # and adaptive thinking is on unless you set an effort level.
+  - name: haiku
+    provider: anthropic
+    model_id: claude-haiku-5-5
+    supports_temperature: false
+  # Same model with adaptive thinking turned off, so replies are direct answers.
+  # This is the run to compare with Luna. Do not start `haiku` until this one is done.
+  - name: haiku_nothink
+    provider: anthropic
+    model_id: claude-haiku-5-5
+    supports_temperature: false
+    thinking: disabled
   - name: open_weight
     provider: openrouter
     model_id: TODO_FILL_IN
