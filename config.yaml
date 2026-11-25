@@ -4,10 +4,7 @@ samples_per_question: 1
 temperature: 0.0
 max_tokens: 1024
 models:
-  - name: claude                 # short label used in charts and tables
-    provider: anthropic
-    model_id: TODO_FILL_IN       # Fill in current model ID yourself
-    supports_temperature: true
+  # `name` is the short label used in charts and tables.
   # Haiku 5.5. Run with: python -m src.run_eval --models haiku --limit 5
   # Key goes in .env as ANTHROPIC_API_KEY. Haiku 5.5 rejects temperature,
   # and adaptive thinking is on unless you set an effort level.
@@ -16,16 +13,17 @@ models:
     model_id: claude-haiku-5-5
     supports_temperature: false
   # Same model with adaptive thinking turned off, so replies are direct answers.
-  # This is the run to compare with Luna. Do not start `haiku` until this one is done.
+  # This is the run I compared with Luna.
   - name: haiku_nothink
     provider: anthropic
     model_id: claude-haiku-5-5
     supports_temperature: false
     thinking: disabled
-  - name: open_weight
-    provider: openrouter
-    model_id: TODO_FILL_IN
-    supports_temperature: true
+  # Any OpenRouter model works too. Add a model_id and uncomment to use it.
+  # - name: open_weight
+  #   provider: openrouter
+  #   model_id: <openrouter model id>
+  #   supports_temperature: true
   # OpenAI. Run with: python -m src.run_eval --models gpt_luna --limit 20
   # Key goes in .env as OPENAI_API_KEY. Do not commit that file.
   # sol and astra stay commented so a plain run cannot spend that money.

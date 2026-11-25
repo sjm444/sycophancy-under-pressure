@@ -1,6 +1,6 @@
 # Sycophancy Under Pressure
 
-A small, reproducible AI safety evaluation measuring whether Large Language Models (LLMs) abandon correct answers under social pressure, whether authority framing amplifies caving, and whether an anti-sycophancy system prompt reduces caving without making models stubbornly reject valid corrections.
+A small AI safety eval that checks whether language models drop correct answers when a user pushes back. It also tests whether claiming authority makes them cave more, and whether an anti-sycophancy system prompt helps without making them refuse real corrections.
 
 ## TL;DR
 
@@ -32,16 +32,16 @@ Measured on caving alone, Haiku would look like the best model. The correction c
 
 ## Methodology Summary
 
-- **Dataset (300 items, seeded):** 100 `logic_and_math` and 100 `science_and_cs` questions filtered to `error_type == "ok"` from `edinburgh-dawg/mmlu-redux-2.0`, plus 100 `common_misconceptions` 4-choice questions built from `truthfulqa/truthful_qa` (`multiple_choice`, `mc1_targets`).
-- **Two-turn branching protocol:** Every `(model, system_prompt, question, sample)` runs Turn 1 once, then branches independently into Turn 2 pushbacks:
+- **Dataset (300 questions, seeded):** 100 `logic_and_math` and 100 `science_and_cs` questions filtered to `error_type == "ok"` from `edinburgh-dawg/mmlu-redux-2.0`, plus 100 `common_misconceptions` 4-choice questions built from `truthfulqa/truthful_qa` (`multiple_choice`, `mc1_targets`).
+- **Two turns, branched:** Every `(model, system_prompt, question, sample)` runs Turn 1 once. Each Turn 2 pushback then starts separately from that same Turn 1:
   - If Turn 1 was **correct:** `bare_doubt`, `suggestion`, `authority`.
   - If Turn 1 was **incorrect:** `bare_doubt`, `corrective`.
-- **Statistical reporting:** All single rates include `n` and 95% Wilson score CIs; prompt effects (`anti_sycophancy - baseline`) use 95% paired question-level bootstrap CIs (2,000 replicates). Parse failures are excluded from denominators and reported separately.
+- **Stats:** Every rate comes with its `n` and a 95% Wilson interval. Prompt effects (`anti_sycophancy - baseline`) use a 95% bootstrap interval that resamples questions so both prompts stay paired (2,000 resamples). Responses I couldn't parse are left out of the rates and reported separately.
 - **Discernment gap:** Accepting corrections alone doesn't show good judgment, since a model that accepts every suggestion would score perfectly. So I also compare how often the model accepts correct vs. incorrect suggestions under identical wording. The gap is the `corrective` switch-to-correct rate minus the `suggestion` adopt-wrong-target rate. Those two rates use different questions, so the 95% CI resamples each set on its own.
 
 For full details, see:
-- [`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md) — pipeline walkthrough, end-to-end example, glossary, and chart reading guide.
-- [`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) — rationale and trade-offs for every design choice.
+- [`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md): how the pipeline works, one real question traced start to finish, a glossary, and how to read the charts.
+- [`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md): why each design choice was made and what it costs.
 
 ---
 
@@ -75,60 +75,50 @@ This writes `data/questions.jsonl` (300 items) and `data/SPOT_CHECK.md` (15 rand
 python -m pytest -v
 ```
 
-### 4. End-to-end mock smoke test (10 questions, no API keys)
+### 4. Run the whole pipeline on the mock model (10 questions, no API keys)
+
+This writes to its own files so it doesn't overwrite real results.
 
 ```bash
-python -m src.run_eval --models mock --limit 10 --out results/raw_results.jsonl
-python -m src.analyze --results results/raw_results.jsonl --out results/summary.md
+python -m src.run_eval --models mock --limit 10 --out results/mock.jsonl
+python -m src.analyze --results results/mock.jsonl --out results/mock_summary.md --assets-dir assets/mock
 ```
 
-### Test OpenAI models
+### 5. Check the call count before spending money (`--dry-run`)
 
-Put the key in `.env` on the `OPENAI_API_KEY=` line. That file is gitignored. The active model is `gpt_luna` (`gpt-6-luna`), the cheap one. `gpt-6.2-sol` and `gpt-6.2-astra` are commented out in `config.yaml`.
-
-Check the call count, then run 20 questions into its own results file:
+Put your keys in `.env` (it's gitignored). `--dry-run` prints the exact Turn 1 count and the min/max total calls without making any:
 
 ```bash
-python -m src.run_eval --models gpt_luna --limit 20 --dry-run
+python -m src.run_eval --models gpt_luna haiku_nothink --dry-run
+```
+
+Each `(model × system_prompt × question × sample)` is 1 Turn 1 call plus 2–3 Turn 2 calls (3 if Turn 1 was right, 2 if it was wrong). On all 300 questions with both system prompts and one sample each, that's 1,800–2,400 calls per model.
+
+On `gpt-6-luna` (the cheap OpenAI model), 20 questions is about 120–160 calls and costs a few cents, or about $0.15 if every reply hits the 1,024-token cap. The full 300 lands around $0.40–$1.50. `gpt-6.2-sol` and `gpt-6.2-astra` are commented out in `config.yaml`. Only turn them on after setting a spending cap, and keep `--limit`.
+
+### 6. Small real check (`--limit`)
+
+```bash
 python -m src.run_eval --models gpt_luna --limit 20 --out results/openai_luna_limit20.jsonl
-python -m src.analyze --results results/openai_luna_limit20.jsonl --out results/openai_luna_summary.md
+python -m src.analyze --results results/openai_luna_limit20.jsonl --out results/openai_luna_limit20_summary.md
 ```
 
-A 20-question run is about 120–160 calls. On `gpt-6-luna` that is a few cents, or about $0.15 if every reply uses the full 1,024-token cap. The full 300-question run is about 1,800–2,400 calls and should land around $0.40–$1.50. Uncomment `gpt_sol` or `gpt_astra` in `config.yaml` only after a spending cap is set, and keep `--limit`.
+### 7. Full run
 
-`--robustness` adds three alternate authority wordings (`authority_v2`, `authority_v3`, `authority_v4`) on a 100-question spread, and only when Turn 1 was correct. The model name in this config is `gpt_luna`.
+```bash
+python -m src.run_eval --models gpt_luna haiku_nothink --workers 8 --out results/raw_results.jsonl
+# If it gets interrupted, pick up where it left off:
+python -m src.run_eval --models gpt_luna haiku_nothink --workers 8 --resume --out results/raw_results.jsonl
+```
+
+`--robustness` adds three more authority wordings (`authority_v2`, `authority_v3`, `authority_v4`) on a 100-question spread, only when Turn 1 was right:
 
 ```bash
 python -m src.run_eval --models gpt_luna --robustness --dry-run
 python -m src.run_eval --models gpt_luna --robustness --out results/openai_luna_robust.jsonl
 ```
 
-### 5. Estimate API call counts before spending money (`--dry-run`)
-
-Fill in your desired `model_id` values in `config.yaml`, then run:
-
-```bash
-python -m src.run_eval --models claude open_weight --dry-run
-```
-
-> **Cost note:** Every `(model × system_prompt × question × sample)` makes **1 Turn 1 call** plus **2–3 Turn 2 calls** (3 if Turn 1 is correct, 2 if Turn 1 is wrong). Always run `--dry-run` first to see the exact Turn 1 count and min/max total calls before launching a paid run. On the full 300-question dataset with 2 system prompts and `samples_per_question: 1`, each model makes **1,800–2,400 API calls**.
-
-### 6. Small real sanity check (`--limit 5`)
-
-```bash
-python -m src.run_eval --models claude --limit 5 --out results/sanity_check.jsonl
-python -m src.analyze --results results/sanity_check.jsonl --out results/sanity_summary.md
-```
-
-### 7. Full run (with `--resume` support)
-
-```bash
-python -m src.run_eval --models claude open_weight --out results/raw_results.jsonl
-# If interrupted, pick up right where you left off:
-python -m src.run_eval --models claude open_weight --resume --out results/raw_results.jsonl
-```
-
-### 8. Analyze results
+### 8. Analyze the results
 
 ```bash
 python -m src.analyze --results results/raw_results.jsonl --out results/summary.md
@@ -232,21 +222,18 @@ Things that should make you careful about these results:
 - **Few wrong answers for strong models.** The corrective condition only runs when the model gets Turn 1 wrong. Luna got about 94% right, which left only ~15–17 corrections to test per prompt. Harder questions would fix this.
 - **Some "stubbornness" is really question ambiguity.** Many of the corrections Luna refused came from TruthfulQA, where the "correct" answer is the skeptical, literal one (picking up a penny doesn't actually bring luck). Luna often picked the folk answer and stuck with it. That's partly disagreement about what the question is asking, not pure stubbornness.
 - **Robustness covers one kind of pressure.** Only authority got alternate wordings, on ~100 questions per model.
-- **Settings aren't identical across models.** Haiku 5.5 doesn't accept a temperature setting, so it ran at its default sampling instead of temperature 0, and it ran with thinking turned off to match Luna's direct answers. Its results may differ with thinking on.
+- **Settings aren't identical across models.** Neither Haiku 5.5 nor GPT-6 Luna accepts a temperature setting, so both ran at their default sampling instead of temperature 0 (Llama ran at 0). Haiku also ran with thinking turned off to match Luna's direct answers, and its results may be different with thinking on.
 - **Haiku's near-zero caving is at the floor.** With 0% caving, the anti-sycophancy prompt had nothing left to reduce, so this data can't say whether the prompt would help Haiku.
-
-- **Benchmark contamination (TruthfulQA / MMLU):** Models may have seen these questions during pretraining, inflating Turn 1 accuracy compared to novel questions.
-- **Remaining label noise:** MMLU-Redux 2.0 removes flagged errors, but some subtle ambiguities or disputed items may still remain.
-- **Single fixed wording per pushback:** Each condition uses one exact phrasing; models may be sensitive to small wording changes or tone variations.
-- **Sample size:** 100 items per category (and fewer for Turn 1 incorrect `corrective` items on strong models) produces non-trivial confidence intervals.
-- **English only:** Findings may not generalize to other languages or cultural authority norms.
-- **Multiple choice vs. open-ended answers:** Forced-choice `A`–`D` questions make scoring clean and automated, but real-world sycophancy often appears in open-ended advice, code review, or nuanced disagreements.
+- **The models have probably seen these questions.** MMLU and TruthfulQA are likely in their training data, which could make Turn 1 accuracy higher than it would be on new questions.
+- **Some answer-key noise is probably left.** MMLU-Redux drops the items flagged as bad, but a few ambiguous ones likely slipped through.
+- **Multiple choice isn't how sycophancy usually shows up.** A–D answers make scoring clean and automatic, but in real use it's more likely to show up in open-ended advice, code review, or arguments.
+- **English only.**
 
 ---
 
 ## How This Was Built
 
-I designed the experiment, chose the datasets and controls, read the transcripts, and wrote the analysis and observations. I used Cursor to write most of the code, then reviewed it. During review we caught and fixed a bug where `--resume` treated failed API calls as finished, and I added a parallel runner to cut run times. Claude helped me plan the study, sanity-check the statistics, and edit the writeup.
+I designed the experiment, chose the datasets and controls, read the transcripts, and wrote the analysis and observations. I used Cursor to write most of the code, then reviewed it. During review we caught and fixed a bug where `--resume` treated failed API calls as finished, and I added a parallel runner to cut run times. Claude helped me plan the study, sanity-check the statistics, and edit the writeup. The original build prompt I gave Cursor is in [`docs/cursor_prompt.md`](docs/cursor_prompt.md).
 
 ---
 
