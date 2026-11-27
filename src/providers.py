@@ -1,15 +1,9 @@
-"""Unified LLM provider interface with retry/backoff and a deterministic mock.
+"""One ``chat()`` function over Anthropic, OpenAI, OpenRouter, Ollama, and a mock.
 
-Why this file exists:
-    Different LLM vendors (Anthropic, OpenAI, OpenRouter, local Ollama) expose
-    slightly different SDKs and error types. Wrapping them behind one ``chat()``
-    function keeps the evaluation harness provider-agnostic, enforces consistent
-    retry/backoff behavior, and lets us swap in a zero-network ``mock`` provider
-    for fast, free end-to-end testing.
-
-Pipeline position:
-    Imported by ``src/run_eval.py``. Takes model config + conversation messages
-    -> returns the assistant's text reply.
+Each SDK has its own parameters and error types, so this keeps the eval loop
+from caring which provider it's talking to. It also handles retries with
+backoff, and the ``mock`` provider lets the whole pipeline run in tests with
+no network calls.
 """
 
 from __future__ import annotations
@@ -113,7 +107,7 @@ def _call_with_retry(fn: Any) -> str:
             last_exc = exc
             if not _is_retryable_error(exc) or attempt == MAX_RETRIES - 1:
                 raise
-            # WHY: Exponential backoff with random jitter prevents thundering
+            # Exponential backoff with random jitter prevents thundering
             # herds when recovering from rate limits or temporary 5xx spikes.
             delay = min(MAX_BACKOFF_SECONDS, BASE_BACKOFF_SECONDS * (2**attempt))
             jitter = random.uniform(0.0, delay * 0.5)
@@ -218,7 +212,7 @@ def _mock_chat(
     target_match = _SUGGESTED_TARGET_RE.search(t2_pushback)
     suggested_target = target_match.group(1).upper() if target_match else None
 
-    # WHY: Robustness wordings do not say "PhD", but they are still authority
+    # Robustness wordings do not say "PhD", but they are still authority
     # pushes. The mock should treat them like the original authority condition.
     pushback_lower = t2_pushback.lower()
     is_authority = any(
@@ -345,14 +339,14 @@ def _chat_openai_compatible(
     full_messages = [{"role": "system", "content": system_prompt}] + [
         {"role": m["role"], "content": m["content"]} for m in messages
     ]
-    # WHY: Current OpenAI models reject `max_tokens` and require
+    # Current OpenAI models reject `max_tokens` and require
     # `max_completion_tokens`. OpenRouter and Ollama still use `max_tokens`.
     kwargs: dict[str, Any] = {
         "model": str(model_cfg["model_id"]),
         "messages": full_messages,
         token_param: max_tokens,
     }
-    # WHY: Some reasoning models reject the `temperature` parameter entirely.
+    # Some reasoning models reject the `temperature` parameter entirely.
     if model_cfg.get("supports_temperature", True):
         kwargs["temperature"] = temperature
 
@@ -438,7 +432,7 @@ def chat(
 
     if provider == "ollama":
         base_url = os.environ.get("OLLAMA_BASE_URL", DEFAULT_OLLAMA_BASE_URL)
-        # WHY: Ollama's OpenAI-compatible server ignores the API key, but the
+        # Ollama's OpenAI-compatible server ignores the API key, but the
         # OpenAI Python SDK requires a non-empty string.
         return _chat_openai_compatible(
             model_cfg,

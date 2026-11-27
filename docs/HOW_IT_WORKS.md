@@ -2,7 +2,7 @@
 
 ## 1. The Big Picture
 
-This repository measures **sycophancy** in Large Language Models (LLMs): the tendency of a model to abandon a correct answer simply because the user pushes back. We give a model 300 vetted multiple-choice questions across three domains (logic & math, science & computer science, and common misconceptions), record its initial answer (**Turn 1**), and then fork the conversation into separate follow-up messages (**Turn 2**) that apply different kinds of social pressure—from bare doubt ("Are you sure?") to an authority claim ("I have a PhD... the answer is definitely D"). We run this entire experiment twice per model: once with a neutral **baseline** system prompt and once with an **anti-sycophancy** system prompt, and we also test whether the anti-sycophancy prompt makes the model stubbornly reject helpful corrections when its Turn 1 answer was actually wrong. Finally, we compute rates with 95% confidence intervals, plot the trade-off, and pull out raw transcripts for hand inspection.
+This repository measures **sycophancy** in Large Language Models (LLMs): the tendency of a model to abandon a correct answer simply because the user pushes back. We give a model 300 vetted multiple-choice questions across three domains (logic & math, science & computer science, and common misconceptions), record its initial answer (**Turn 1**), and then fork the conversation into separate follow-up messages (**Turn 2**) that apply different kinds of social pressure, from bare doubt ("Are you sure?") to an authority claim ("I have a PhD... the answer is definitely D"). We run this entire experiment twice per model: once with a neutral **baseline** system prompt and once with an **anti-sycophancy** system prompt, and we also test whether the anti-sycophancy prompt makes the model stubbornly reject helpful corrections when its Turn 1 answer was actually wrong. Finally, we compute rates with 95% confidence intervals, plot the trade-off, and pull out raw transcripts for hand inspection.
 
 ---
 
@@ -92,7 +92,7 @@ Because Turn 1 was **correct**, `get_applicable_conditions(True)` selects three 
 
 *(If Turn 1 had been **incorrect**, `get_applicable_conditions(False)` would instead run two branches: `bare_doubt` and `corrective`, where `corrective` uses the `suggestion` wording with `target = "B"`, the correct answer.)*
 
-Each branch is a fresh API call—the model never sees the other branches.
+Each branch is a fresh API call, so the model never sees the other branches.
 
 ### Step D: Example raw JSONL record (`results/raw_results.jsonl`)
 
@@ -145,15 +145,15 @@ Suppose under `authority` the model caves and switches to `D`. Immediately after
 
 Read the codebase in this order to build a mental model from inputs to outputs:
 
-1. **`config.yaml`** — All experiment knobs (seed, dataset size, temperature, max tokens, model list).
-2. **`src/build_dataset.py`** — Defines the `Question` schema and builds `data/questions.jsonl` + `data/SPOT_CHECK.md` from Hugging Face.
-3. **`src/prompts.py`** — Every system prompt and Turn 1 / Turn 2 message template in one place.
-4. **`src/parsing.py`** — Extracts `A`/`B`/`C`/`D` from free-text model outputs using a primary regex and a prose fallback.
-5. **`src/providers.py`** — Unified `chat()` wrapper over Anthropic, OpenAI, OpenRouter, Ollama, and the deterministic `mock` provider, plus retry/backoff logic.
-6. **`src/run_eval.py`** — The main two-turn branching loop, JSONL append/flush logging, `--resume` state recovery, and `--dry-run` cost estimator.
-7. **`src/stats.py`** — `wilson_ci` (confidence intervals for single rates), `bootstrap_diff_ci` (paired question-level CIs for prompt differences), and `bootstrap_independent_diff_ci` (unpaired CIs for the discernment gap).
-8. **`src/analyze.py`** — Computes every metric, draws the three 300-DPI charts, and writes `results/summary.md`.
-9. **`tests/`** — Unit tests for parsing, dataset invariants, and statistics, plus `test_pipeline_mock.py` which runs the whole pipeline end to end without network access.
+1. **`config.yaml`**: All experiment knobs (seed, dataset size, temperature, max tokens, model list).
+2. **`src/build_dataset.py`**: Defines the `Question` schema and builds `data/questions.jsonl` + `data/SPOT_CHECK.md` from Hugging Face.
+3. **`src/prompts.py`**: Every system prompt and Turn 1 / Turn 2 message template in one place.
+4. **`src/parsing.py`**: Extracts `A`/`B`/`C`/`D` from free-text model outputs using a primary regex and a prose fallback.
+5. **`src/providers.py`**: Unified `chat()` wrapper over Anthropic, OpenAI, OpenRouter, Ollama, and the deterministic `mock` provider, plus retry/backoff logic.
+6. **`src/run_eval.py`**: The main two-turn branching loop, JSONL append/flush logging, `--resume` state recovery, and `--dry-run` cost estimator.
+7. **`src/stats.py`**: `wilson_ci` (confidence intervals for single rates), `bootstrap_diff_ci` (paired question-level CIs for prompt differences), and `bootstrap_independent_diff_ci` (unpaired CIs for the discernment gap).
+8. **`src/analyze.py`**: Computes every metric, draws the three 300-DPI charts, and writes `results/summary.md`.
+9. **`tests/`**: Unit tests for parsing, dataset invariants, and statistics, plus `test_pipeline_mock.py` which runs the whole pipeline end to end without network access.
 
 ---
 
@@ -161,7 +161,7 @@ Read the codebase in this order to build a mental model from inputs to outputs:
 
 - **Sycophancy:** A model's tendency to agree with a user's stated belief or pushback even when doing so contradicts the truth or the model's own earlier correct answer.
 - **System prompt:** High-level instruction sent before the conversation begins that sets the assistant's role, formatting rules, and behavioral priorities (here, `baseline` vs. `anti_sycophancy`).
-- **Temperature:** Controls randomness when the model picks its next token. `0.0` is (nearly) deterministic—the model picks the highest-probability token—while higher values (e.g., `0.7`) sample more varied responses.
+- **Temperature:** Controls randomness when the model picks its next token. `0.0` is (nearly) deterministic (the model picks the highest-probability token), while higher values (e.g., `0.7`) sample more varied responses.
 - **Branching:** Taking one saved Turn 1 conversation state `[user_t1, assistant_t1]` and spawning multiple independent Turn 2 API calls from it so each pushback condition starts from the exact same baseline reply.
 - **Parse failure:** A model response from which our parser cannot extract a clear answer letter (`A`, `B`, `C`, or `D`). We exclude parse failures from rate denominators so formatting glitches are not mistaken for caving, and we report the parse failure rate separately.
 - **Confidence interval (CI):** A range of plausible values for a true underlying rate given our finite sample. A 95% CI means that if we repeated the entire sampling procedure many times, 95% of the resulting intervals would contain the true rate.
@@ -204,7 +204,7 @@ The two rates are not a paired comparison. A question that was correct on Turn 1
 
 ### A crucial note on overlapping error bars
 - **Non-overlapping 95% CIs** strongly suggest a real difference between two rates.
-- **Overlapping 95% CIs do *not* automatically mean "no difference"!** Two 95% CIs can overlap slightly and still have a statistically significant difference—especially when both rates are measured on the **same questions** (paired data). That is why `summary.md` Section 5 computes a dedicated **paired question-level bootstrap CI** for `anti_sycophancy - baseline`: look at whether *that* difference CI excludes `0.0 pp`, not just whether the two individual bars' error bars overlap. The discernment gap in Section 4 is the other case: those two rates are **not** on the same questions, so its CI is an unpaired bootstrap.
+- **Overlapping 95% CIs do *not* automatically mean "no difference"!** Two 95% CIs can overlap slightly and still have a statistically significant difference, especially when both rates are measured on the **same questions** (paired data). That is why `summary.md` Section 5 computes a dedicated **paired question-level bootstrap CI** for `anti_sycophancy - baseline`: look at whether *that* difference CI excludes `0.0 pp`, not just whether the two individual bars' error bars overlap. The discernment gap in Section 4 is the other case: those two rates are **not** on the same questions, so its CI is an unpaired bootstrap.
 
 ---
 

@@ -1,19 +1,12 @@
-"""Statistical uncertainty helpers (Wilson intervals and question-level bootstrap).
+"""Confidence interval helpers: Wilson intervals and question-level bootstrap.
 
-Why this file exists:
-    Reporting raw percentages like "40% caving" without sample sizes or
-    uncertainty bounds is misleading — 4/10 and 400/1000 have very different
-    reliability. This module provides two lightweight, dependency-free
-    statistical tools tailored for multiple-choice LLM evaluations:
-      1. ``wilson_ci`` for single proportions (e.g., caving rate on 100 items).
-      2. ``bootstrap_diff_ci`` for comparing two system prompts on the same
-         set of questions.
-      3. ``bootstrap_independent_diff_ci`` for a difference of two rates
-         measured on different questions (the discernment gap).
+A bare "40% caving" doesn't say much on its own, since 4/10 and 400/1000 are
+very different. This file has three small tools:
 
-Pipeline position:
-    Imported by ``src/analyze.py`` to compute confidence intervals for every
-    table and chart error bar.
+1. ``wilson_ci`` for a single rate.
+2. ``bootstrap_diff_ci`` for comparing two system prompts on the same questions.
+3. ``bootstrap_independent_diff_ci`` for comparing two rates measured on
+   different questions (the discernment gap).
 """
 
 from __future__ import annotations
@@ -27,22 +20,19 @@ import numpy as np
 def wilson_ci(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
     """Compute the Wilson score confidence interval for a binomial proportion.
 
-    What it computes:
-        Given ``successes`` events out of ``n`` independent trials, returns
-        ``(low, high)`` bounds (in ``[0.0, 1.0]``) for the true underlying rate.
-        With ``z=1.96``, this is a 95% confidence interval.
+    Given ``successes`` events out of ``n`` independent trials, returns
+    ``(low, high)`` bounds (in ``[0.0, 1.0]``) for the true underlying rate.
+    With ``z=1.96``, this is a 95% confidence interval.
 
-    Why it is used here:
-        The textbook normal approximation (``p ± 1.96 * sqrt(p(1-p)/n)``) breaks
-        down when ``n`` is small or when ``p`` is near 0% or 100% — for
-        example, at 0/10 it claims a zero-width interval ``[0%, 0%]`` and can
-        even produce negative lower bounds. The Wilson score interval stays
-        inside ``[0, 1]`` and remains well-calibrated even at 0/10 or 10/10.
+    The textbook normal approximation (``p ± 1.96 * sqrt(p(1-p)/n)``) breaks
+    down when ``n`` is small or when ``p`` is near 0% or 100%. For
+    example, at 0/10 it claims a zero-width interval ``[0%, 0%]`` and can
+    even produce negative lower bounds. The Wilson score interval stays
+    inside ``[0, 1]`` and remains well-calibrated even at 0/10 or 10/10.
 
-    How to read the output:
-        A result of ``(0.24, 0.76)`` means the data are consistent with a true
-        rate anywhere between 24% and 76%. Wider intervals mean higher
-        uncertainty (usually because ``n`` is small).
+    A result of ``(0.24, 0.76)`` means the data are consistent with a true
+    rate anywhere between 24% and 76%. Wider intervals mean higher
+    uncertainty (usually because ``n`` is small).
 
     Args:
         successes: Number of positive outcomes (``0 <= successes <= n``).
@@ -89,26 +79,23 @@ def bootstrap_diff_ci(
 ) -> tuple[float, float, float]:
     """Compute a percentile bootstrap CI for ``treatment - baseline`` over questions.
 
-    What it computes:
-        Estimates the difference in rate (``mean(treatment) - mean(baseline)``)
-        and its ``(1 - alpha)`` confidence interval (95% by default) by
-        resampling **question IDs** with replacement ``n_reps`` times.
+    Estimates the difference in rate (``mean(treatment) - mean(baseline)``)
+    and its ``(1 - alpha)`` confidence interval (95% by default) by
+    resampling **question IDs** with replacement ``n_reps`` times.
 
-    Why it is used here:
-        We evaluate both ``baseline`` and ``anti_sycophancy`` on the *same*
-        questions. Resampling question IDs (rather than treating the two runs
-        as independent samples) preserves that pairing — if a question is hard
-        under both prompts, it is drawn together in each bootstrap replicate.
-        It also handles ``samples_per_question > 1`` cleanly when each value is
-        the question's average outcome across samples, avoiding over-counting
-        repeated samples of the same question as independent data points.
+    We evaluate both ``baseline`` and ``anti_sycophancy`` on the *same*
+    questions. Resampling question IDs (rather than treating the two runs
+    as independent samples) preserves that pairing. If a question is hard
+    under both prompts, it is drawn together in each bootstrap replicate.
+    It also handles ``samples_per_question > 1`` cleanly when each value is
+    the question's average outcome across samples, avoiding over-counting
+    repeated samples of the same question as independent data points.
 
-    How to read the output:
-        Returns ``(diff, ci_low, ci_high)`` where ``diff = treatment - baseline``.
-        For caving rates, a *negative* diff (e.g., ``-0.35``, CI ``[-0.48, -0.22]``)
-        means ``anti_sycophancy`` reduced caving by 35 percentage points. If
-        the interval excludes 0, the difference is statistically distinguishable
-        from zero at the ``1 - alpha`` level.
+    Returns ``(diff, ci_low, ci_high)`` where ``diff = treatment - baseline``.
+    For caving rates, a *negative* diff (e.g., ``-0.35``, CI ``[-0.48, -0.22]``)
+    means ``anti_sycophancy`` reduced caving by 35 percentage points. If
+    the interval excludes 0, the difference is statistically distinguishable
+    from zero at the ``1 - alpha`` level.
 
     Args:
         baseline_by_qid: Mapping from ``question_id`` to numeric outcome
@@ -152,7 +139,7 @@ def bootstrap_diff_ci(
     sampled_base = base_vals[idx]
     sampled_treat = treat_vals[idx]
 
-    # WHY: Because Turn 1 accuracy can differ slightly between prompts, a
+    # Because Turn 1 accuracy can differ slightly between prompts, a
     # question might enter `authority` under baseline but not under
     # anti_sycophancy. Using nanmean handles unpaired entries cleanly while
     # preserving pairing for every shared question.
@@ -181,10 +168,9 @@ def bootstrap_independent_diff_ci(
 ) -> tuple[float, float, float]:
     """Compute a percentile bootstrap CI for ``mean(left) - mean(right)``.
 
-    What it computes:
-        The point estimate is the difference of the two group means. The
-        ``(1 - alpha)`` interval (95% by default) comes from resampling each
-        group separately, with replacement, at its own size, ``n_reps`` times.
+    The point estimate is the difference of the two group means. The
+    ``(1 - alpha)`` interval (95% by default) comes from resampling each
+    group separately, with replacement, at its own size, ``n_reps`` times.
 
     Why it is not ``bootstrap_diff_ci``:
         ``bootstrap_diff_ci`` resamples one shared list of question IDs so a
@@ -194,14 +180,13 @@ def bootstrap_independent_diff_ci(
         question cannot be in both groups, so each group is resampled on its
         own.
 
-    How to read the output:
-        Returns ``(diff, ci_low, ci_high)`` where
-        ``diff = mean(left) - mean(right)``. For the discernment gap, ``left``
-        is the corrective switch-to-correct outcome and ``right`` is the
-        suggestion adopt-wrong-target outcome. A positive diff means the model
-        accepted a named correct answer more often than it adopted a named
-        wrong answer. If the interval excludes 0, the two rates differ at the
-        ``1 - alpha`` level.
+    Returns ``(diff, ci_low, ci_high)`` where
+    ``diff = mean(left) - mean(right)``. For the discernment gap, ``left``
+    is the corrective switch-to-correct outcome and ``right`` is the
+    suggestion adopt-wrong-target outcome. A positive diff means the model
+    accepted a named correct answer more often than it adopted a named
+    wrong answer. If the interval excludes 0, the two rates differ at the
+    ``1 - alpha`` level.
 
     Args:
         left_by_qid: Mapping from ``question_id`` to a numeric outcome

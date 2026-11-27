@@ -14,7 +14,7 @@ Each entry explains a key methodological or engineering choice in *Decision / Wh
 - **Decision:** Use `edinburgh-dawg/mmlu-redux-2.0` and keep only rows annotated with `error_type == "ok"`. (Verified directly against Hugging Face Hub; all 9 requested subjects exist and have 87–100 clean items each.)
 - **Why:** Original MMLU has a well-documented rate of label errors (wrong ground truth, multiple valid answers, or unclear stems). Filtering to `error_type == "ok"` removes known noisy items before evaluation.
 - **Alternatives considered:** Using `cais/mmlu` directly (which has more questions per subject, but uncleaned labels).
-- **Trade-off:** MMLU-Redux 2.0 annotates 100 questions per subject, giving a smaller pool (~382 clean items for `logic_and_math` and ~487 for `science_and_cs`)—still well above our default 100 per category, though limiting if you later scale to 500+ items per category.
+- **Trade-off:** MMLU-Redux 2.0 annotates 100 questions per subject, giving a smaller pool (~382 clean items for `logic_and_math` and ~487 for `science_and_cs`), still well above our default 100 per category, though limiting if you later scale to 500+ items per category.
 
 ## 3. Seeded-random wrong target (`target_wrong_answer`)
 - **Decision:** Assign each question a single fixed `target_wrong_answer` chosen uniformly at random (with `config.yaml`'s `seed`) among its three incorrect letters, and store it in `data/questions.jsonl`.
@@ -24,7 +24,7 @@ Each entry explains a key methodological or engineering choice in *Decision / Wh
 
 ## 4. Branching Turn 2 from the exact same Turn 1 state
 - **Decision:** Run Turn 1 once per `(model, system_prompt, question, sample)` and branch all applicable Turn 2 conditions from that identical `[user_t1, assistant_t1]` transcript as separate API calls.
-- **Why:** Guarantees that differences between `bare_doubt`, `suggestion`, and `authority` are caused purely by the Turn 2 pushback wording—not by different Turn 1 reasoning paths—and saves Turn 1 API calls (1 Turn 1 call instead of 3).
+- **Why:** Guarantees that differences between `bare_doubt`, `suggestion`, and `authority` are caused purely by the Turn 2 pushback wording, not by different Turn 1 reasoning paths, and saves Turn 1 API calls (1 Turn 1 call instead of 3).
 - **Alternatives considered:** Running a fresh Turn 1 for each Turn 2 condition; chaining multiple pushbacks sequentially in one conversation.
 - **Trade-off:** Because Turn 2 branches share the same Turn 1 response, outcomes across conditions on the same question are correlated (which is desirable for comparing conditions, but means branches are not independent samples of Turn 1).
 
@@ -54,7 +54,7 @@ Each entry explains a key methodological or engineering choice in *Decision / Wh
 
 ## 9. Wilson score CI over the normal approximation
 - **Decision:** Compute 95% confidence intervals for all single proportions using `wilson_ci(successes, n)` rather than the Wald / normal approximation (`p ± 1.96 * sqrt(p(1-p)/n)`).
-- **Why:** The Wald interval collapses to zero width at `0/n` or `n/n` (falsely implying zero uncertainty) and can overshoot below 0% or above 100% at small `n`. Wilson intervals remain well-calibrated for small `n` and extreme rates near 0% or 100%—both of which occur often in category breakdowns and `bare_doubt` controls.
+- **Why:** The Wald interval collapses to zero width at `0/n` or `n/n` (falsely implying zero uncertainty) and can overshoot below 0% or above 100% at small `n`. Wilson intervals remain well-calibrated for small `n` and extreme rates near 0% or 100%, both of which occur often in category breakdowns and `bare_doubt` controls.
 - **Alternatives considered:** Wald normal approximation; exact Clopper-Pearson intervals (which are overly conservative / wider than necessary).
 - **Trade-off:** Slightly less familiar formula than `p ± 1.96*SE`, documented in plain English in `src/stats.py`.
 
@@ -68,7 +68,7 @@ Each entry explains a key methodological or engineering choice in *Decision / Wh
 - **Decision:** Default to `temperature: 0.0` and `samples_per_question: 1` in `config.yaml`.
 - **Why:** Temperature `0.0` approximates greedy decoding, maximizing repeatability and keeping API costs minimal while you iterate on the eval. Note that some hosted APIs still exhibit minor nondeterminism at `temperature: 0.0`.
 - **Alternatives considered:** Defaulting to `temperature: 0.7` with `samples_per_question: 5`.
-- **Trade-off:** With `samples_per_question: 1` at `temperature: 0.0`, we measure each model's single most likely trajectory per question rather than its distribution of behaviors. Increasing `samples_per_question > 1` (with `temperature > 0`) captures within-question variance and checks whether caving is deterministic or probabilistic—at `k×` the API cost.
+- **Trade-off:** With `samples_per_question: 1` at `temperature: 0.0`, we measure each model's single most likely trajectory per question rather than its distribution of behaviors. Increasing `samples_per_question > 1` (with `temperature > 0`) captures within-question variance and checks whether caving is deterministic or probabilistic, at `k×` the API cost.
 
 ## 12. Append-and-flush JSONL logging after every call
 - **Decision:** Append one complete JSON record and `flush()` to `results/raw_results.jsonl` immediately after every Turn 2 call (or failed Turn 1), keyed by `(model_name, system_prompt_name, question_id, sample_idx, condition)` for `--resume`.

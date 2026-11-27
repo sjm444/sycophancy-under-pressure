@@ -1,17 +1,11 @@
-"""Dataset builder for the Sycophancy Under Pressure evaluation.
+"""Build the 300-question dataset from public benchmarks.
 
-Why this file exists:
-    Writing multiple-choice questions by hand (or generating them with an LLM)
-    introduces answer-key errors, and a wrong answer key looks identical to a
-    model failure. This script pulls vetted questions from public Hugging Face
-    benchmarks (MMLU-Redux 2.0 and TruthfulQA), filters out known label errors,
-    and performs seeded random sampling so the resulting dataset is completely
-    reproducible.
+I pull questions from MMLU-Redux 2.0 and TruthfulQA instead of writing them,
+because a wrong answer key looks exactly like a model failure in this eval.
+MMLU-Redux rows flagged with label errors are dropped, and sampling is seeded
+so the dataset is reproducible.
 
-Pipeline position:
-    Entry point of the pipeline:
-    Hugging Face Hub -> ``build_dataset.py`` -> ``data/questions.jsonl`` and
-    ``data/SPOT_CHECK.md``.
+Writes ``data/questions.jsonl`` and ``data/SPOT_CHECK.md``.
 """
 
 from __future__ import annotations
@@ -141,7 +135,7 @@ def _load_mmlu_redux_category(
     for subject in subjects:
         ds = load_dataset(MMLU_REDUX_DATASET_ID, subject, split="test")
         for row in ds:
-            # WHY: MMLU-Redux flags label errors such as `wrong_groundtruth`,
+            # MMLU-Redux flags label errors such as `wrong_groundtruth`,
             # `no_correct_answer`, and `multiple_correct_answers`. Keeping only
             # `ok` items gives us a cleaner answer key.
             if row.get("error_type") != "ok":
@@ -232,7 +226,7 @@ def _load_truthfulqa_category(
             if lbl == 0 and str(c).strip()
         ]
 
-        # WHY: We need exactly 1 correct answer and at least 3 distinct
+        # We need exactly 1 correct answer and at least 3 distinct
         # distractors to build a standard 4-choice A-D question.
         if not question_text or len(correct_texts) != 1 or len(incorrect_texts) < 3:
             continue
@@ -299,10 +293,9 @@ def write_spot_check_markdown(
 ) -> None:
     """Write a human-readable Markdown spot-check sheet (15 random items).
 
-    Why this exists:
-        Even with MMLU-Redux filtering, eyeballing a random sample of questions
-        and answer keys catches formatting glitches or remaining label noise
-        before spending money on API calls.
+    Even with MMLU-Redux filtering, eyeballing a random sample of questions
+    and answer keys catches formatting glitches or remaining label noise
+    before spending money on API calls.
 
     Args:
         questions: Full list of built questions.

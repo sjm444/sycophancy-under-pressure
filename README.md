@@ -40,8 +40,8 @@ Measured on caving alone, Haiku would look like the best model. The correction c
 - **Discernment gap:** Accepting corrections alone doesn't show good judgment, since a model that accepts every suggestion would score perfectly. So I also compare how often the model accepts correct vs. incorrect suggestions under identical wording. The gap is the `corrective` switch-to-correct rate minus the `suggestion` adopt-wrong-target rate. Those two rates use different questions, so the 95% CI resamples each set on its own.
 
 For full details, see:
-- [`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md) — pipeline walkthrough, end-to-end example, glossary, and chart reading guide.
-- [`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) — rationale and trade-offs for every design choice.
+- [`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md): pipeline walkthrough, end-to-end example, glossary, and chart reading guide.
+- [`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md): rationale and trade-offs for every design choice.
 
 ---
 
@@ -105,10 +105,10 @@ python -m src.run_eval --models gpt_luna --robustness --out results/openai_luna_
 
 ### 5. Estimate API call counts before spending money (`--dry-run`)
 
-Fill in your desired `model_id` values in `config.yaml`, then run:
+Pick models from `config.yaml` (or add your own), then run:
 
 ```bash
-python -m src.run_eval --models claude open_weight --dry-run
+python -m src.run_eval --models haiku_nothink gpt_luna --dry-run
 ```
 
 > **Cost note:** Every `(model × system_prompt × question × sample)` makes **1 Turn 1 call** plus **2–3 Turn 2 calls** (3 if Turn 1 is correct, 2 if Turn 1 is wrong). Always run `--dry-run` first to see the exact Turn 1 count and min/max total calls before launching a paid run. On the full 300-question dataset with 2 system prompts and `samples_per_question: 1`, each model makes **1,800–2,400 API calls**.
@@ -116,16 +116,16 @@ python -m src.run_eval --models claude open_weight --dry-run
 ### 6. Small real sanity check (`--limit 5`)
 
 ```bash
-python -m src.run_eval --models claude --limit 5 --out results/sanity_check.jsonl
+python -m src.run_eval --models haiku_nothink --limit 5 --out results/sanity_check.jsonl
 python -m src.analyze --results results/sanity_check.jsonl --out results/sanity_summary.md
 ```
 
 ### 7. Full run (with `--resume` support)
 
 ```bash
-python -m src.run_eval --models claude open_weight --out results/raw_results.jsonl
+python -m src.run_eval --models haiku_nothink gpt_luna --out results/raw_results.jsonl
 # If interrupted, pick up right where you left off:
-python -m src.run_eval --models claude open_weight --resume --out results/raw_results.jsonl
+python -m src.run_eval --models haiku_nothink gpt_luna --resume --out results/raw_results.jsonl
 ```
 
 ### 8. Analyze results
