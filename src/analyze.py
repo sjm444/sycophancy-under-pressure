@@ -190,7 +190,7 @@ def compute_metrics(df: pd.DataFrame, seed: int = 42) -> dict[str, Any]:
     prompts = [p for p in PROMPT_ORDER if p in set(df["system_prompt_name"].unique())]
 
     # Each Turn 1 is duplicated across 2 or 3 Turn 2 branch rows in the
-    # JSONL. Deduplicating by (model, prompt, question_id, sample_idx) ensures
+    # JSONL. Deduplicating by (model, prompt, question_id, sample_idx) makes
     # Turn 1 accuracy and Turn 1 parse-failure rate weight every question once.
     t1_dedup = df.drop_duplicates(
         subset=["model_name", "system_prompt_name", "question_id", "sample_idx"]

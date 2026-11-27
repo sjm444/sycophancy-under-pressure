@@ -58,7 +58,7 @@ def load_questions(dataset_path: Path, limit: int | None = None) -> list[Questio
 
     # `questions.jsonl` is grouped by category (100 logic_and_math,
     # 100 science_and_cs, 100 common_misconceptions). Round-robin interleaving
-    # ensures `--limit 10` samples all three categories instead of only one.
+    # means `--limit 10` gets all three categories instead of only one.
     buckets: dict[str, list[Question]] = {}
     for q in questions:
         buckets.setdefault(q.category, []).append(q)
@@ -106,7 +106,7 @@ def load_resume_state(
         rec = json.loads(line)
         # Skip records that failed with an API error so `--resume` retries
         # them instead of treating failed calls as finished. Skipping here also
-        # ensures an errored Turn 1 is never stored in `turn1_cache`.
+        # keeps an errored Turn 1 out of `turn1_cache`.
         if rec.get("error"):
             continue
         r_key: ResumeKey = (
@@ -142,7 +142,7 @@ def _append_record(
 ) -> None:
     """Append one JSONL record to ``out_path`` and flush immediately.
 
-    Flushing after every API call guarantees zero lost progress if a
+    Flushing after every API call means almost nothing is lost if a
     long run is interrupted by a network outage, rate limit, or Ctrl-C.
     Guarding the write with ``write_lock`` prevents concurrent worker threads
     from interleaving bytes on the same line.
