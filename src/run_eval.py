@@ -1,16 +1,9 @@
-"""Evaluation harness for running multi-turn sycophancy experiments.
+"""Run the two-turn sycophancy eval.
 
-Why this file exists:
-    Orchestrates the core two-turn evaluation loop: asks each model every
-    question on Turn 1, parses the response, branches into each applicable
-    Turn 2 pushback condition from the exact same Turn 1 state, and appends
-    every result immediately to JSONL so interrupted runs can be resumed
-    without wasting API calls.
-
-Pipeline position:
-    Middle of the pipeline:
-    ``data/questions.jsonl`` + ``config.yaml`` -> ``run_eval.py`` ->
-    ``results/raw_results.jsonl``.
+For each question: ask Turn 1, parse the answer, then branch into every Turn 2
+pushback that applies, all from the same Turn 1 transcript. Each result is
+appended to the JSONL right away, so an interrupted run can pick up where it
+left off with ``--resume``.
 """
 
 from __future__ import annotations
@@ -63,9 +56,9 @@ def load_questions(dataset_path: Path, limit: int | None = None) -> list[Questio
     if limit is None or limit >= len(questions):
         return questions
 
-    # WHY: `questions.jsonl` is grouped by category (100 logic_and_math,
+    # `questions.jsonl` is grouped by category (100 logic_and_math,
     # 100 science_and_cs, 100 common_misconceptions). Round-robin interleaving
-    # ensures `--limit 10` samples all three categories instead of only one.
+    # means `--limit 10` gets all three categories instead of only one.
     buckets: dict[str, list[Question]] = {}
     for q in questions:
         buckets.setdefault(q.category, []).append(q)
@@ -111,9 +104,9 @@ def load_resume_state(
         if not line.strip():
             continue
         rec = json.loads(line)
-        # WHY: Skip records that failed with an API error so `--resume` retries
+        # Skip records that failed with an API error so `--resume` retries
         # them instead of treating failed calls as finished. Skipping here also
-        # ensures an errored Turn 1 is never stored in `turn1_cache`.
+        # keeps an errored Turn 1 out of `turn1_cache`.
         if rec.get("error"):
             continue
         r_key: ResumeKey = (
@@ -149,7 +142,7 @@ def _append_record(
 ) -> None:
     """Append one JSONL record to ``out_path`` and flush immediately.
 
-    WHY: Flushing after every API call guarantees zero lost progress if a
+    Flushing after every API call means almost nothing is lost if a
     long run is interrupted by a network outage, rate limit, or Ctrl-C.
     Guarding the write with ``write_lock`` prevents concurrent worker threads
     from interleaving bytes on the same line.
@@ -285,7 +278,7 @@ def run_evaluation(
         models = all_models
 
     questions = load_questions(dataset_path, limit=limit)
-    # WHY: questions.jsonl is grouped by category, so the literal first 100
+    # questions.jsonl is grouped by category, so the literal first 100
     # rows are all logic_and_math. Round-robin selection keeps the robustness
     # slice spread across the three categories.
     robust_ids = (
@@ -345,11 +338,11 @@ def run_evaluation(
     ]
 
     records_written = 0
-    # WHY: One lock protects both JSONL appends (so two threads never write
+    # One lock protects both JSONL appends (so two threads never write
     # interleaved bytes onto the same line) and in-memory shared state
     # (`completed`, `turn1_cache`, `records_written`).
     write_lock = threading.Lock()
-    # WHY: Caps total simultaneous API requests at `workers`, even when a trial
+    # Caps total simultaneous API requests at `workers`, even when a trial
     # runs its Turn 2 branches concurrently. Threads release the semaphore
     # before waiting on Turn 2 futures, so nested submission cannot deadlock.
     api_semaphore = threading.Semaphore(workers)
@@ -417,7 +410,7 @@ def run_evaluation(
                 t1_correct = None
                 t1_error = f"{type(exc).__name__}: {exc}"
 
-            # WHY: Only cache Turn 1 when the API call succeeded (no error).
+            # Only cache Turn 1 when the API call succeeded (no error).
             if t1_error is None:
                 with write_lock:
                     turn1_cache[t1_key] = {

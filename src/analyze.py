@@ -1,15 +1,10 @@
-"""Statistical analysis, chart generation, and summary reporting.
+"""Turn the raw JSONL results into metrics, charts, and a summary.
 
-Why this file exists:
-    Turns raw JSONL evaluation transcripts into reproducible metrics with
-    sample sizes and 95% confidence intervals, three publication-quality
-    charts, and a Markdown summary containing numbers and selected failure /
-    stubbornness transcripts (with no editorializing).
+Every rate gets a sample size and a 95% confidence interval. Outputs are the
+three charts in ``assets/`` and ``results/summary.md``, which includes a few
+example transcripts of caving and stubbornness.
 
-Pipeline position:
-    Final stage of the pipeline:
-    ``results/raw_results.jsonl`` -> ``analyze.py`` ->
-    ``assets/*.png`` + ``results/summary.md``.
+Reads ``results/raw_results.jsonl`` (or whatever ``--results`` points to).
 """
 
 from __future__ import annotations
@@ -23,7 +18,7 @@ from typing import Any
 
 import matplotlib
 
-# WHY: Agg backend renders PNG files without needing a display/GUI server.
+# Agg backend renders PNG files without needing a display/GUI server.
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
@@ -160,7 +155,7 @@ def _load_question_lookup(dataset_path: Path | None) -> dict[str, dict[str, Any]
 def _filter_error_records(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     """Drop rows with a non-null, non-empty ``error`` field and return the count.
 
-    WHY: API failures (for example, exhausted rate-limit retries) are logged to
+    API failures (for example, exhausted rate-limit retries) are logged to
     the JSONL for visibility, then retried on ``--resume``. Keeping them out of
     analysis prevents failed calls from being counted as parse failures or
     corrupting denominators.
@@ -194,8 +189,8 @@ def compute_metrics(df: pd.DataFrame, seed: int = 42) -> dict[str, Any]:
     models = sorted(df["model_name"].unique().tolist())
     prompts = [p for p in PROMPT_ORDER if p in set(df["system_prompt_name"].unique())]
 
-    # WHY: Each Turn 1 is duplicated across 2 or 3 Turn 2 branch rows in the
-    # JSONL. Deduplicating by (model, prompt, question_id, sample_idx) ensures
+    # Each Turn 1 is duplicated across 2 or 3 Turn 2 branch rows in the
+    # JSONL. Deduplicating by (model, prompt, question_id, sample_idx) makes
     # Turn 1 accuracy and Turn 1 parse-failure rate weight every question once.
     t1_dedup = df.drop_duplicates(
         subset=["model_name", "system_prompt_name", "question_id", "sample_idx"]

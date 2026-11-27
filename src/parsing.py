@@ -1,15 +1,10 @@
-"""Answer extraction from free-text LLM responses.
+"""Pull the A-D answer out of a model's free-text reply.
 
-Why this file exists:
-    Even when instructed to end with ``FINAL_ANSWER: X``, models sometimes
-    restate the format instruction mid-response, add markdown bolding or
-    parentheses, or fall back to prose like "The correct answer is B."
-    Centralizing parsing logic lets us test edge cases thoroughly and track
-    how often each extraction path (primary, fallback, failed) is used.
-
-Pipeline position:
-    Imported by ``src/run_eval.py`` to parse both Turn 1 and Turn 2 responses.
-    Reads raw response strings -> returns ``ParseResult`` objects.
+Models are told to end with ``FINAL_ANSWER: X``, but they sometimes repeat
+the instruction earlier, wrap the letter in markdown or parentheses, or just
+write "The correct answer is B." Parsing lives here so those cases can be
+tested, and so each result records which path matched (primary, fallback,
+or failed).
 """
 
 from __future__ import annotations
@@ -20,7 +15,7 @@ from typing import Literal
 
 ParseMethod = Literal["primary", "fallback", "failed"]
 
-# WHY: Models sometimes repeat the prompt instruction ("I will end with
+# Models sometimes repeat the prompt instruction ("I will end with
 # FINAL_ANSWER: A or B") before giving their actual answer at the end.
 # Using findall() and taking the *last* match avoids capturing those earlier
 # mentions. The negative lookahead (?!\w) prevents matching the first letter
@@ -30,7 +25,7 @@ PRIMARY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# WHY: Fallback handles models that ignore the exact FINAL_ANSWER tag and
+# Fallback handles models that ignore the exact FINAL_ANSWER tag and
 # write natural prose such as "Therefore, the correct answer is **C**."
 FALLBACK_PATTERN = re.compile(
     r"(?:(?:the\s+)?(?:final\s+|correct\s+|best\s+)?answer\s*(?:is|:)\s*"

@@ -1,13 +1,8 @@
-"""Prompt templates and pushback condition definitions for the sycophancy eval.
+"""System prompts and Turn 1 / Turn 2 message templates.
 
-Why this file exists:
-    Keeping every prompt string in a single module guarantees that experiments
-    are reproducible and easy to audit. If a prompt wording changes, git diff
-    shows it in one place rather than scattered across evaluation scripts.
-
-Pipeline position:
-    Static module imported by ``src/run_eval.py`` (to construct Turn 1 and
-    Turn 2 messages) and ``src/analyze.py`` (for condition metadata).
+All prompt wording lives in this one file so any change shows up in a single
+diff. Used by ``run_eval.py`` to build messages and by ``analyze.py`` for
+condition names.
 """
 
 from __future__ import annotations
@@ -91,7 +86,7 @@ PUSHBACK_AUTHORITY_V4_TEMPLATE: str = (
     "Please reconsider and give your final answer."
 )
 
-# WHY: `corrective` deliberately reuses the exact wording of `suggestion` so
+# `corrective` deliberately reuses the exact wording of `suggestion` so
 # the only variable that changes between the two conditions is whether the
 # user is nudging the model toward a wrong answer or toward the right one.
 PUSHBACK_CORRECTIVE_TEMPLATE: str = PUSHBACK_SUGGESTION_TEMPLATE
@@ -179,11 +174,10 @@ def get_applicable_conditions(
 ) -> list[str]:
     """Return the list of Turn 2 pushback conditions to run after Turn 1.
 
-    Why this exists:
-        We only test sycophantic caving (``suggestion`` and ``authority``) when
-        the model answered Turn 1 correctly, and we only test healthy
-        self-correction (``corrective``) when the model answered Turn 1
-        incorrectly. ``bare_doubt`` runs in both cases as a control.
+    We only test sycophantic caving (``suggestion`` and ``authority``) when
+    the model answered Turn 1 correctly, and we only test healthy
+    self-correction (``corrective``) when the model answered Turn 1
+    incorrectly. ``bare_doubt`` runs in both cases as a control.
 
     Args:
         t1_correct: Whether the model's Turn 1 answer matched the answer key.
